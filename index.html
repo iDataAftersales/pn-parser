@@ -115,6 +115,64 @@ function identifySeries(pn){
   return null;
 }
 
+function getSeriesAliases(seriesName){
+  const aliases=[];
+  const m1=seriesName.match(/^(.+?)\(/);
+  if(m1){aliases.push(m1[1].trim().toUpperCase().replace(/\s+/g,''));}
+  const m2=seriesName.match(/（(.+?)）/);
+  if(m2){
+    const raw=m2[1].trim().toUpperCase();
+    aliases.push(raw.replace(/\s+/g,''));
+    const spaceParts=raw.split(/\s+/);
+    for(let i=0;i<spaceParts.length;i++){
+      const prefix=spaceParts.slice(0,i+1).join('-');
+      if(prefix.length>=2)aliases.push(prefix);
+    }
+    const p=m2[1].split(/[\s\-]+/);
+    for(let i=0;i<p.length;i++){
+      const prefix=p.slice(0,i+1).join('').toUpperCase().replace(/\s+/g,'');
+      if(prefix.length>=2)aliases.push(prefix);
+    }
+  }
+  const m3=seriesName.match(/\((.+?)\)/);
+  if(m3){
+    const raw=m3[1].trim().toUpperCase();
+    aliases.push(raw.replace(/\s+/g,''));
+    const spaceParts=raw.split(/\s+/);
+    for(let i=0;i<spaceParts.length;i++){
+      const prefix=spaceParts.slice(0,i+1).join('-');
+      if(prefix.length>=2)aliases.push(prefix);
+    }
+    const p=m3[1].split(/[\s\-]+/);
+    for(let i=0;i<p.length;i++){
+      const prefix=p.slice(0,i+1).join('').toUpperCase().replace(/\s+/g,'');
+      if(prefix.length>=2)aliases.push(prefix);
+    }
+  }
+  const clean=seriesName.replace(/\s*[\(（].*?[\)）]/g,'').toUpperCase().replace(/\s+/g,'');
+  if(clean)aliases.push(clean);
+  const short=seriesName.replace(/[\(\)（）].*/g,'').toUpperCase().replace(/\s+/g,'');
+  if(short)aliases.push(short);
+  return [...new Set(aliases)].filter(a=>a.length>=2);
+}
+
+function splitPN(pn,seriesName){
+  const parts=pn.split('-');
+  const aliases=getSeriesAliases(seriesName);
+  let bestMatchParts=1;
+  for(let i=Math.min(parts.length,5);i>=1;i--){
+    const candidate=parts.slice(0,i).join('-').toUpperCase().replace(/\s+/g,'');
+    for(const alias of aliases){
+      if(candidate===alias){bestMatchParts=i;break;}
+    }
+    if(bestMatchParts>1)break;
+  }
+  const seriesPart=parts.slice(0,bestMatchParts).join('-');
+  const configCode=parts[bestMatchParts]||'';
+  const customerCode=parts.slice(bestMatchParts+1).join('-')||'';
+  return{seriesPart,configCode,customerCode};
+}
+
 function parsePN(){
   const pn=document.getElementById('pnInput').value.trim();
   if(!pn){alert('请输入PN码');return;}
@@ -132,22 +190,11 @@ function parsePN(){
     }
     const config=PN_CONFIGS[series];
     const dims=config.dimensions;
-    const parts=pn.split('-');
-    let configCode='',customerCode='';
+    const split=splitPN(pn,series);
+    const configCode=split.configCode;
+    const customerCode=split.customerCode;
     
-    const seriesClean=series.replace(/\s*[\(（].*?[\)）]/g,'').toUpperCase().replace(/\s+/g,'');
-    let testSeries=parts[0].toUpperCase().replace(/\s+/g,'');
-    if(!testSeries.startsWith(seriesClean.substring(0,Math.min(testSeries.length,seriesClean.length)))&&parts.length>1){
-      const remaining=parts.slice(2);
-      if(remaining.length>=1)configCode=remaining[0];
-      if(remaining.length>1)customerCode=remaining.slice(1).join('-');
-    }else{
-      const remaining=parts.slice(1);
-      if(remaining.length>=1)configCode=remaining[0];
-      if(remaining.length>1)customerCode=remaining.slice(1).join('-');
-    }
-    
-    const result={success:true,pn:pn,product_series:series,analysis:{config_code:configCode,customer_code:customerCode,fields:[],warnings:[]}};
+    const result={success:true,pn:pn,product_series:series,series_part:split.seriesPart,analysis:{config_code:configCode,customer_code:customerCode,fields:[],warnings:[]}};
     
     for(let i=0;i<Math.min(configCode.length,dims.length);i++){
       const char=configCode[i];const dim=dims[i];
